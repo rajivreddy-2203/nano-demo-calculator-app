@@ -1,28 +1,70 @@
-const express = require('express');
+const express = require("express");
 const app = express();
 
-const PORT = process.env.PORT || 8080;
+const MAX_HISTORY_LENGTH = 20;
+const history = [];
 
-const baseUrl = '/calculator'
+function convertLinkToExpression(link) {
+  const operators = {
+    plus: "+",
+    minus: "-",
+    times: "*",
+    divide: "/",
+    power: "**",
+    mod: "%",
+  };
 
-app.use(express.json());
+  const expression = link
+    .split("/")
+    .map((part) => {
+      if (operators.hasOwnProperty(part)) {
+        return operators[part];
+      } else if (!isNaN(parseFloat(part))) {
+        return part;
+      } else {
+        throw new Error(`Invalid part in the link: ${part}`);
+      }
+    })
+    .join("");
 
-const baseRouter = express.Router();
+  return expression;
+}
 
-baseRouter.get('/greeting', (req, res) => {
-    return res.send('');
+function evaluateExpression(expression) {
+  try {
+    return eval(expression);
+  } catch (error) {
+    throw new Error(`Error evaluating expression: ${error.message}`);
+  }
+}
+
+app.get("/history", (req, res) => {
+  const historyText = history
+    .map((item, index) => `${index + 1}. ${item.link} = ${item.result}`)
+    .join("\n");
+  res.send(`History:\n${historyText}`);
+});
+app.get("/:link*", (req, res) => {
+  const encodedLink = req.params.link + (req.params[0] || "");
+  const link = decodeURIComponent(encodedLink);
+
+  try {
+    const result = convertLinkToExpression(link);
+    const evaluatedResult = evaluateExpression(result);
+
+    // Add the operation to history
+    history.unshift({ link, result: evaluatedResult });
+    if (history.length > MAX_HISTORY_LENGTH) {
+      history.pop();
+    }
+
+    res.send(`Link: ${link}\nResult: ${evaluatedResult}`);
+  } catch (error) {
+    res.status(400).send(`Error: ${error.message}`);
+  }
 });
 
-baseRouter.post('/add', (req, res) => {
-    res.json({ "": null });
-});
-
-
-baseRouter.post('/subtract', (req, res) => {
-    res.json({ "": null });
-});
-
-app.use(baseUrl, baseRouter);
-app.listen(PORT, () => {
-    console.log("Server running at PORT", PORT);
+const port = 3000;
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
 });
